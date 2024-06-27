@@ -71,3 +71,46 @@ void enableRawMode(){
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
+
+// ---------- Ouput ---------- //
+void editorRefreshScreen() {
+    write(STDOUT_FILENO, "\x1b[2J", 4);
+}
+
+
+// Wait for a keypress and return it 
+char editorReadKey() {
+    int nread;
+    char c;
+    while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
+        if (nread == -1 && errno != EAGAIN) die("read");
+    }
+    return c;
+}
+
+
+// ---------- Input ---------- //
+
+// Wait for a keypress and handles it 
+// Mapping various ctrl + combinations to different editor functions
+void editorProcessKeypress() {
+    char c = editorReadKey();
+    switch (c) {
+        case CTRL_KEY('q'):
+            exit(0);
+            break;
+    }   
+}
+
+// ---------- Init ---------- //
+
+int main(){
+    enableRawMode();
+
+    while (1) {
+        editorProcessKeypress(); // Check for key combinations
+        editorRefreshScreen(); // Refresh the editor screen after each keypress
+    }
+
+    return 0;
+}
