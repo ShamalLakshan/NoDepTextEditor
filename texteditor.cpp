@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <iostream>
 #include <errno.h>  
+#include <sys/ioctl.h>
 // #include <stdio.h>
 
 
@@ -15,8 +16,14 @@
 
 // ---------- Data ---------- //
 
-//Disabling Raw mode
-struct termios orig_termios;
+//To get the width and the height of the terminal.
+struct editorConfig {
+    int screenrows;
+    int screencols;
+    //Disabline raw mode
+    struct termios orig_termios;
+};
+struct editorConfig E;
 
 // ---------- Terminal ---------- //
 
@@ -32,7 +39,7 @@ void die(const char *s) {
 }
 
 void disableRawMode() {
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1)
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
         die("tcsetattr");
 }
 
@@ -40,18 +47,19 @@ void disableRawMode() {
 //Enables Raw mode instead of the Canonical mode.
 void enableRawMode(){
     //Error Handling
-    if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) die("tcgetattr");
+    if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1) die("tcgetattr");
 
     //Disables raw mode at exit
     atexit(disableRawMode);
 
-    struct termios raw = orig_termios;
+    // struct termios raw = orig_termios;
     
-    tcgetattr(STDIN_FILENO, &raw);
+    // tcgetattr(STDIN_FILENO, &raw);
 
-    //IXON - Disables ctrl + s , ctrl + q...   
-    //ICRNL - Disables ctrl + m.
-    raw.c_iflag &= ~(ICRNL | IXON);
+    // //IXON - Disables ctrl + s , ctrl + q...   
+    // //ICRNL - Disables ctrl + m.
+    // raw.c_iflag &= ~(ICRNL | IXON);
+    struct termios raw = E.orig_termios;
 
     //Turning off some miscellaneous flags
     raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
@@ -77,12 +85,23 @@ void enableRawMode(){
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
+int getWindowSize(int *rows, int *cols) {
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+        return -1;
+    } else {
+      *cols = ws.ws_col;
+      *rows = ws.ws_row;
+        return 0;
+    }
+}
+
 // ---------- Ouput ---------- //
 
 //Tildes                                                                                                    
 void editorDrawRows() {
     int y;
-    for (y = 0; y < 24; y++) {
+    for (y = 0; y < E.screenrows; y++) {
         write(STDOUT_FILENO, "~\r\n", 3);
     }
 }
@@ -125,8 +144,14 @@ void editorProcessKeypress() {
 
 // ---------- Init ---------- //
 
+
+void initEditor() {
+    if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
+}
+
 int main(){
     enableRawMode();
+    initEditor();
 
     while (1) {
         editorProcessKeypress(); // Check for key combinations
